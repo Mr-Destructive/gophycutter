@@ -1,0 +1,10 @@
+## {{ .cookiecutter.name }}
+
+Hello, fellow gophers!
+
+Version: {{ .cookiecutter.version }}
+
+Example Values from config:
+
+Boolean: {{ .cookiecutter.is_set }}
+Integer: {{ .cookiecutter.cookies }}
