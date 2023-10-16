@@ -35,13 +35,17 @@ func generateFiles(context map[string]interface{}, inputDir, outputDir string) e
 		os.MkdirAll(outputDir, os.ModePerm)
 	}
 
-	err := filepath.Walk(outputDir, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(inputDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return fmt.Errorf("Error accessing file or directory: %v", err)
 		}
 
+		if info.IsDir() && info.Name() == ".git" {
+			return filepath.SkipDir
+		}
+
 		relativePath, _ := filepath.Rel(inputDir, path)
-		outputPath := filepath.Join(outputDir, relativePath)
+		outputPath := filepath.Join(outputDir, renderTemplate(relativePath, context))
 
 		if info.IsDir() {
 			if _, err := os.Stat(outputPath); os.IsNotExist(err) {
@@ -52,7 +56,6 @@ func generateFiles(context map[string]interface{}, inputDir, outputDir string) e
 				return err
 			}
 		}
-
 		return nil
 	})
 
@@ -62,6 +65,15 @@ func generateFiles(context map[string]interface{}, inputDir, outputDir string) e
 
 	fmt.Println("Done!")
 	return nil
+}
+
+func renderTemplate(input string, context map[string]interface{}) string {
+	tmpl := template.New("").Funcs(template.FuncMap{})
+	tmpl, _ = tmpl.Parse(input)
+
+	var renderedContent strings.Builder
+	tmpl.Execute(&renderedContent, context)
+	return renderedContent.String()
 }
 
 func processFile(inputPath, outputPath string, context map[string]interface{}) error {
@@ -83,6 +95,8 @@ func processFile(inputPath, outputPath string, context map[string]interface{}) e
 	if err != nil {
 		return fmt.Errorf("Error rendering template: %v", err)
 	}
+
+	outputPath = renderTemplate(outputPath, context)
 
 	err = os.WriteFile(outputPath, []byte(renderedContent.String()), 0644)
 	if err != nil {
@@ -129,7 +143,7 @@ func main() {
 	var inputDir string
 	fmt.Println("Enter the path to the directory:")
 	fmt.Scanln(&inputDir)
-	var repoName string
+	repoName := inputDir
 
 	if strings.HasPrefix(inputDir, "https://") {
 		// download the git repo
@@ -140,7 +154,6 @@ func main() {
 			fmt.Printf("Error cloning repo: %v\n", err)
 			return
 		}
-
 	}
 	configFile := filepath.Join(repoName, "cookiecutter.json")
 	context, err := generateContext(configFile)
@@ -157,7 +170,13 @@ func main() {
 	}
 	context["cookiecutter"] = data
 
-	outputDir := repoName
+	// get current working directory
+	currentDir, err := os.Getwd()
+	folderName := func() string {
+		path := strings.Split(repoName, "/")
+		return path[len(path)-1]
+	}()
+	outputDir := filepath.Join(currentDir, folderName)
 	err = generateFiles(context, inputDir, outputDir)
 	if err != nil {
 		fmt.Printf("Error generating files: %v\n", err)
