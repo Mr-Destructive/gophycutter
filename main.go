@@ -139,6 +139,31 @@ func getUserInput() string {
 	return val
 }
 
+func runPostGenScripts(outputDir string) error {
+	postGenDir := filepath.Join(outputDir, "post_gen")
+	_, err := os.Stat(postGenDir)
+	if os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("Error checking post_gen directory: %v", err)
+	}
+
+	// List all files in post_gen directory
+	files, err := filepath.Glob(filepath.Join(postGenDir, "*.go"))
+	if err != nil {
+		return fmt.Errorf("Error listing files in post_gen directory: %v", err)
+	}
+	for _, file := range files {
+		cmd := exec.Command("go", "run", file)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("Error running post-gen script %s: %v", file, err)
+		}
+	}
+	return nil
+}
+
 func main() {
 	var inputDir string
 	fmt.Println("Enter the path to the directory:")
@@ -180,5 +205,10 @@ func main() {
 	err = generateFiles(context, inputDir, outputDir)
 	if err != nil {
 		fmt.Printf("Error generating files: %v\n", err)
+	}
+	err = runPostGenScripts(outputDir)
+	if err != nil {
+		fmt.Printf("Error running post-gen scripts: %v\n", err)
+		return
 	}
 }
